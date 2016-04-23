@@ -1,0 +1,240 @@
+| \gDiscovering Types from Strings
+
+Typelevel Summit Oslo 2016
+
+Jonathan Merritt
+<j.s.merritt@gmail.com>
+---
+| \gSummary
+
+Plan for this talk:
+  - Beginner level shapeless and cats
+  - Schema discovery problem
+  - Two small, bite-sized chunks:
+    - HList of parsers
+    - Maps as semigroups
+  - REPL-based (for extra adventure)
+---
+| \gThe Schema Discovery Problem
+
+Consider a file like this:
+
+  \b2014-01-01, 24.5, Yes
+  \b2014-01-02, 44.1, Yes
+  \b2014-01-03, 87.3,  No
+  \b2014-01-04,   42, Yes
+  \b       ...,  ..., ...
+
+What are the types in each column?
+---
+| \gSimple Heuristics
+
+We'll use some heuristics:
+
+  - if a String can be parsed as a type, then it
+    may be an instance of that type
+
+  - if there are only limited values in a column,
+    then they might be categorical
+---
+| \gRestricted Problem
+
+For simplicity, we'll only consider \bone \scolum
+of the data
+---
+| \gImports
+
+Imports we'll need later:
+
+```
+import shapeless._, poly._
+import cats.syntax.all._
+import cats.std.all._
+```
+---
+| \gTrial Parsing
+
+We want to test a list of parsers against each
+value to see which parsers succeed.
+
+```
+trait Parser[T] {
+  def parse(s: String): Option[T]
+}
+```
+---
+| \gExample Parsers
+
+```
+object StringParser extends Parser[String] {
+  def parse(s: String): Option[String] = Some(s)
+}
+
+object DoubleParser extends Parser[Double] {
+  def parse(s: String): Option[Double] = try {
+    Some(s.toDouble)
+  } catch {
+    case ex: NumberFormatException => None
+  }
+}
+```
+---
+| \gTrying the Parsers
+
+```
+val cell = "Hello"
+
+val sres = StringParser.parse(cell)
+val dres = DoubleParser.parse(cell)
+```
+---
+| \gList of Parsers
+
+```
+val plist = StringParser :: DoubleParser :: Nil
+val res = plist.map(_.parse(cell))
+```
+
+This approach works, but we lose the type information:
+  res :: List[Option[Any]]
+---
+| \gInstead: HList of Parsers
+
+```
+val phlist = StringParser :: DoubleParser :: HNil
+val res = phlist.map(_.parse(cell))
+```
+
+Doesn't work: Scala can't figure out the type of
+the function because it's polymorphic:
+  - Parser[String]
+  - Parser[Double]
+
+http://milessabin.com/blog/2012/04/27/
+   shapeless-polymorphic-function-values-1/
+---
+| \gParsing as a Polymorphic Function
+
+To fix this, we need a Shapeless polymorphic function:
+
+```
+object pparse extends Poly1 {
+  implicit def parse[T] = at[Parser[T]](_.parse(cell))
+}
+
+val phlist = StringParser :: DoubleParser :: HNil
+val res = phlist map pparse
+```
+
+Still doesn't work!
+---
+| \gType Constraint Trick (Travis Brown)
+
+```
+object pparse extends Poly1 {
+  implicit def parse[T, S]
+    (implicit ev: S <:< Parser[T]) =
+      at[S](_.parse(cell))
+}
+
+val phlist = StringParser :: DoubleParser :: HNil
+
+val res = phlist map pparse
+```
+
+Success!
+---
+| \gRemaining Parts
+
+Suggestions for completing this functionality:
+
+  - Include the cell value as a parameter (eg. zip
+    it with the list of parsers)
+
+  - Extend to multiple columns
+---
+| \gMaps as Semigroups
+
+Consider a column containing the following values:
+
+```
+val col = List("Yes", "Yes", "No", "Yes", "No")
+```
+
+To identify categorical variables, we need to
+aggregate a count of the values in this list to 
+produce:
+
+```
+val expected = Map("Yes" -> 3, "No" -> 2)
+```
+
+What is the fastest way to achieve this?
+---
+| \gTransform to Single-Element Maps
+
+First step can be to transform the list to a list of
+single-element maps:
+
+```
+col map (item => Map(item -> 1))
+```
+---
+| \gCombining Maps
+
+We need to sum values in the maps which share the
+same keys:
+
+```
+val res = col
+    .map(item => Map(item -> 1))
+    .combineAll
+```
+---
+| \gHow Did That Work?
+
+Values in the map are semigroup instances
+
+Cats (via non/algebra) allows you to construct a
+monoid and semigroup for a Map provided that its
+values are semigroup instances
+---
+| \gSemigroup
+
+A semigroup is:
+  - a set, with
+  - an associative binary operator; ie:
+      (x |+| y) |+| z = x |+| (y |+| z)
+
+eg: (Int, +) form a semigroup:
+  - (x + y) + z = x + (y + z)
+---
+| \gMonoid
+
+A monoid is:
+  - a semigroup, with
+  - an identity element (i), such that for every
+    element of the monoid (e):
+      i |+| e = e |+| i = e
+
+eg: (Int, +, 0) form a monoid:
+  - (Int, +) forms a semigroup
+  - 0 + e = e + 0 = e
+---
+| \gIn Our Example
+
+In our case, Int and Map[_, Int] are acting as
+semigroups
+
+Addition is the binary operator for Int
+
+Addition of values with the same key is the
+binary operator for maps
+---
+| \gWrapping Up
+
+In summary:
+  - type discovery
+  - good introductory problem
+  - HLists from shapeless
+  - Monoid and Semigroup from cats
