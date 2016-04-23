@@ -16,4 +16,4 @@ shortcut keys.
 
 ASCIInema preview:
 
-[![asciicast](https://asciinema.org/a/bwyshm6cmbzco5q7t6lk65npu.png?theme=solarized-light)](https://asciinema.org/a/bwyshm6cmbzco5q7t6lk65npu.png?theme=solarized-light)
+[![asciicast](https://asciinema.org/a/bwyshm6cmbzco5q7t6lk65npu.png?theme=solarized-light)](https://asciinema.org/a/bwyshm6cmbzco5q7t6lk65npu?theme=solarized-light)
