@@ -4,6 +4,9 @@ Typelevel Summit Oslo 2016
 
 Jonathan Merritt
 <j.s.merritt@gmail.com>
+
+
+(Presentation created using REPLesent)
 ---
 | \gSummary
 
@@ -162,7 +165,7 @@ val col = List("Yes", "Yes", "No", "Yes", "No")
 ```
 
 To identify categorical variables, we need to
-aggregate a count of the values in this list to 
+aggregate a count of the values in this list to
 produce:
 
 ```
