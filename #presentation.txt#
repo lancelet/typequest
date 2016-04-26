@@ -50,7 +50,6 @@ of the data
 Imports we'll need later:
 
 ```
-import java.util.Try
 import shapeless._, poly._
 import cats.syntax.all._
 import cats.std.all._
@@ -75,8 +74,11 @@ object StringParser extends Parser[String] {
 }
 
 object DoubleParser extends Parser[Double] {
-  def parse(s: String): Option[Double] = 
-    Try(s.toDouble).toOption 
+  def parse(s: String): Option[Double] = try {
+    Some(s.toDouble)
+  } catch {
+    case ex: NumberFormatException => None
+  }
 }
 ```
 ---
@@ -120,7 +122,7 @@ To fix this, we need a Shapeless polymorphic function:
 
 ```
 object pparse extends Poly1 {
-  implicit def parse[T](cell: String) = at[Parser[T]](_.parse(cell))
+  implicit def parse[T] = at[Parser[T]](_.parse(cell))
 }
 
 val phlist = StringParser :: DoubleParser :: HNil
@@ -133,7 +135,7 @@ Still doesn't work!
 
 ```
 object pparse extends Poly1 {
-  implicit def parse[T, S](cell: String)
+  implicit def parse[T, S]
     (implicit ev: S <:< Parser[T]) =
       at[S](_.parse(cell))
 }
