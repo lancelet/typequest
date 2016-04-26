@@ -69,16 +69,14 @@ trait Parser[T] {
 | \gExample Parsers
 
 ```
+import scala.util.Try
+
 object StringParser extends Parser[String] {
-  def parse(s: String): Option[String] = Some(s)
+  def parse(s: String) = Some(s)
 }
 
 object DoubleParser extends Parser[Double] {
-  def parse(s: String): Option[Double] = try {
-    Some(s.toDouble)
-  } catch {
-    case ex: NumberFormatException => None
-  }
+  def parse(s: String) = Try(s.toDouble).toOption
 }
 ```
 ---
