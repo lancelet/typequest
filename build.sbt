@@ -3,7 +3,7 @@ lazy val root = (project in file(".")).
     name         := "typequest",
     organization := "typequest",
     version      := "0.1.0",
-    scalaVersion := "2.11.7"
+    scalaVersion := "2.11.8"
   )
 
 libraryDependencies ++= Seq(

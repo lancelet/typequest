@@ -22,11 +22,11 @@ Plan for this talk:
 
 Consider a file like this:
 
-  \b2014-01-01, 24.5, Yes
-  \b2014-01-02, 44.1, Yes
-  \b2014-01-03, 87.3,  No
-  \b2014-01-04,   42, Yes
-  \b       ...,  ..., ...
+  \b2014-01-01, 24.5,  True
+  \b2014-01-02, 44.1,  True
+  \b2014-01-03, 87.3, False
+  \b2014-01-04,   42,  True
+  \b       ...,  ...,   ...
 
 What are the types in each column?
 ---
@@ -61,9 +61,9 @@ We want to test a list of parsers against each
 value to see which parsers succeed.
 
 ```
-trait Parser[T] {
-  def parse(s: String): Option[T]
-}
+case class Parser[T](
+  parse: String => Option[T]
+)
 ```
 ---
 | \gExample Parsers
@@ -71,13 +71,13 @@ trait Parser[T] {
 ```
 import scala.util.Try
 
-object StringParser extends Parser[String] {
-  def parse(s: String) = Some(s)
-}
+val stringParser = Parser[String](
+  Some.apply
+)
 
-object DoubleParser extends Parser[Double] {
-  def parse(s: String) = Try(s.toDouble).toOption
-}
+val doubleParser = Parser[Double](
+  s => Try(s.toDouble).toOption
+)
 ```
 ---
 | \gTrying the Parsers
@@ -85,14 +85,14 @@ object DoubleParser extends Parser[Double] {
 ```
 val cell = "Hello"
 
-val sres = StringParser.parse(cell)
-val dres = DoubleParser.parse(cell)
+val sres = stringParser.parse(cell)
+val dres = doubleParser.parse(cell)
 ```
 ---
 | \gList of Parsers
 
 ```
-val plist = StringParser :: DoubleParser :: Nil
+val plist = stringParser :: doubleParser :: Nil
 val res = plist.map(_.parse(cell))
 ```
 
@@ -102,7 +102,7 @@ This approach works, but we lose the type information:
 | \gInstead: HList of Parsers
 
 ```
-val phlist = StringParser :: DoubleParser :: HNil
+val phlist = stringParser :: doubleParser :: HNil
 val res = phlist.map(_.parse(cell))
 ```
 
@@ -123,7 +123,7 @@ object pparse extends Poly1 {
   implicit def parse[T] = at[Parser[T]](_.parse(cell))
 }
 
-val phlist = StringParser :: DoubleParser :: HNil
+val phlist = stringParser :: doubleParser :: HNil
 val res = phlist map pparse
 ```
 
@@ -138,7 +138,7 @@ object pparse extends Poly1 {
       at[S](_.parse(cell))
 }
 
-val phlist = StringParser :: DoubleParser :: HNil
+val phlist = stringParser :: doubleParser :: HNil
 
 val res = phlist map pparse
 ```
@@ -152,14 +152,14 @@ Suggestions for completing this functionality:
   - Include the cell value as a parameter (eg. zip
     it with the list of parsers)
 
-  - Extend to multiple columns
+  - Package as a function
 ---
 | \gMaps as Semigroups
 
 Consider a column containing the following values:
 
 ```
-val col = List("Yes", "Yes", "No", "Yes", "No")
+val col = List("True", "True", "False", "True", "False")
 ```
 
 To identify categorical variables, we need to
@@ -167,7 +167,7 @@ aggregate a count of the values in this list to
 produce:
 
 ```
-val expected = Map("Yes" -> 3, "No" -> 2)
+val expected = Map("True" -> 3, "False" -> 2)
 ```
 
 What is the fastest way to achieve this?
@@ -231,6 +231,12 @@ Addition is the binary operator for Int
 
 Addition of values with the same key is the
 binary operator for maps
+---
+| \gMore Code
+
+A more complete version of this code is included
+in the talk repository:
+  http://github.com/lancelet/typequest
 ---
 | \gWrapping Up
 
