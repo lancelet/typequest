@@ -10,8 +10,7 @@ import cats.std.all._
 
 
 /**
- * Demonstrates histogramming of types that can be parsed from a single
- * column of a text file.
+ * Demonstrates histogramming of types that are parsed from a list of strings.
  *
  * To run, try it in the console:
  *   $ sbt console
