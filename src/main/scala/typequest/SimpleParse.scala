@@ -3,15 +3,53 @@ package typequest
 import scala.util.Try
 
 import shapeless._, poly._, ops.hlist._, ops.nat._, UnaryTCConstraint._
+
 import cats.Monoid
 import cats.syntax.all._
 import cats.std.all._
 
+
+/**
+ * Demonstrates histogramming of types that can be parsed from a single
+ * column of a text file.
+ *
+ * To run, try it in the console:
+ *   $ sbt console
+ *   scala> import typequest.SimpleParse._
+ *   scala> tvhExample
+ *
+ * In the example provided in the class, we have the following column of
+ * string values:
+ *   val column = List(
+ *     "Hello", "42.0", "True", "False", "True", "True", "False", "True",
+ *     "41", "42"
+ *   )
+ *
+ * We attempt to parse each element using a parser that can recognize doubles
+ * and a parser that can recognize strings:
+ *   val parsers = doubleParser :: stringParser :: HNil
+ * If parsing succeeds, we collect a histogram / map of all the unique values.
+ *
+ * In the case of this list, the output should be:
+ *   tvhExample = Map(41.0 -> 1, 42.0 -> 2) ::
+ *                Map(True  -> 4,
+ *                    42    -> 1,
+ *                    Hello -> 1,
+ *                    41    -> 1,
+ *                    False -> 2,
+ *                    42.0  -> 1) ::
+ *                HNil
+ */
 object SimpleParse {
 
   // --- Parsers
 
-  /** Parses a string to a T. */
+  /**
+   * Parses a string to a T.
+   *
+   * A more sophisticated setup might use a sum type that could also capture
+   * details about the parse failure, such as an Xor[FailureInfo, T].
+   */
   case class Parser[T](parse: String => Option[T])
 
   val stringParser = Parser[String](Some.apply)
@@ -21,45 +59,40 @@ object SimpleParse {
   /** HList of parsers we want to use later. */
   val parsers = doubleParser :: stringParser :: HNil
 
+
   // --- Try multiple parsers on a single value
 
   /**
    * Parses a single value.
    *
    * This is essentially:
-   *   (Parser[T], String) -> Option[T]
-   *
-   * It takes a tuple of a parser and a String value to attempt to parse. It
-   * returns the result of the parsing.
+   *   forall T. (Parser[T], String) => Option[T]
+   * It parses the string value with the given parser.
    */
   object parseValue extends Poly1 {
-    implicit def go[T, S](implicit ev: S <:< (Parser[T], String)) = at[S](x =>
-      ev(x) match {
-        case (parser, str) => parser.parse(str)
-      }
-    )
+    implicit def go[T] = at[(Parser[T], String)] {
+      case (parser, str) => parser.parse(str)
+    }
   }
 
   /**
    * Runs each parser in an HList of parsers on a String, and return the
    * results concatenated into an HList.
    *
-   * The type parameters of the input parsers will match the type parameters
-   * of the output parse results. So, for example, if the parser types are as
-   * follows:
-   *   `Parser[Double] :: Parser[String] :: HNil`
-   * then the returned type will be:
-   *   `Option[Double] :: Option[String] :: HNil`
+   * The type parameters of the output HList of options will match the type
+   * parameters of the parsers. For example:
+   *   Input:   Parser[Double] :: Parser[String] :: HNil
+   *   Output:  Option[Double] :: Option[String] :: HNil
    */
   def runParsers [
-    L <: HList,
+    PS <: HList,
     H0 <: HList,
     H1 <: HList
-  ](parserHList: L)(value: String)
+  ](parserHList: PS)(value: String)
   (implicit
-    parserConstraint: *->*[Parser]#λ[L],
-    constMapper: ConstMapper.Aux[String, L, H0],
-    zipper: Zip.Aux[L :: H0 :: HNil, H1],
+    parserConstraint: *->*[Parser]#λ[PS],
+    constMapper: ConstMapper.Aux[String, PS, H0],
+    zipper: Zip.Aux[PS :: H0 :: HNil, H1],
     mapper: Mapper[parseValue.type, H1]
   ): mapper.Out = {
     val cells = parserHList mapConst value
@@ -69,9 +102,13 @@ object SimpleParse {
   val runParsersSample1 = runParsers(parsers)("42.0")
   val runParsersSample2 = runParsers(parsers)("Test")
 
+
   // --- Construct a single-element map for each parsed result
 
-  /** This performs `Option[T] -> Map[T, Long]` (forall `T`). */
+  /**
+   * This is:
+   *   forall T. Option[T] => Map[T, Long]
+   */
   object toSingletonMap extends (Option ~> ({type L[T] = Map[T, Long]})#L) {
     def apply[T](x: Option[T]) = x match {
       case Some(y) => Map(y -> 1L)
@@ -79,13 +116,16 @@ object SimpleParse {
     }
   }
 
-  val singletonMapExample = runParsersSample2 map toSingletonMap
+  val singletonMapExample = runParsers(parsers)("Test") map toSingletonMap
+
 
   // --- Monoid over HLists of Monoids
 
   /**
-   * Provides a `Monoid[T1 :: T2 :: ... :: TN :: HNil]` given `Monoid`
-   * instances for `T1`, `T2`, ... `TN`.
+   * Provides a Cats / Algebra
+   *   Monoid[T1 :: T2 :: ... :: TN :: HNil]
+   * given Monoid instances for
+   *          T1,   T2,   ...,   TN.
    *
    * (transcribed from the shapeless example `monoids.scala`, but for Cats
    * Monoids)
@@ -113,45 +153,48 @@ object SimpleParse {
 
   import HLMonoid._
 
+
   // --- Summarize a column of input values
 
   /**
-   * Monoidal aggregation of the product of parsers applied to string values
-   * in a list.
+   * Creates typed histograms of successfully-parsed values in a list of
+   * strings.
    *
-   * For each string in the list, attempt parsing using all provided parsers.
-   * Then aggregate all results, to produce maps between values of parsed
-   * types and their counts.
+   * The function should be supplied with an HList of parsers and a list of
+   * strings to try parsing. Successful parse results are aggregated into
+   * histograms (one per parser), which count the unique values that were
+   * parsed.
    *
-   * Again, the type parameters of the input parsers will match the type
-   * parameters of the output maps. For example, if the input parsers are:
-   *   Parser[Double] :: Parser[String] :: HNil
-   * Then the output maps will be:
-   *   Map[Double, Long] :: Map[String, Long] :: HNil
+   * The function outputs maps from values to counts. The type parameters of
+   * the output maps will match the type parameters of the parsers. For
+   * example:
+   *   Input:   Parser[Double]    :: Parser[String]    :: HNil
+   *   Output:  Map[Double, Long] :: Map[String, Long] :: HNil
    */
-  def summarize [
-    L <: HList,
+  def typedValueHistograms [
+    PS <: HList,
     H0 <: HList,
     H1 <: HList,
     H2 <: HList,
     H3 <: HList
-  ](parserHList: L)(column: List[String])
+  ](parserHList: PS)(column: List[String])
   (implicit
-    parserConstrant: *->*[Parser]#λ[L],
-    ev1: ConstMapper.Aux[String, L, H0],
-    ev2: Zip.Aux[L :: H0 :: HNil, H1],
+    parserConstrant: *->*[Parser]#λ[PS],
+    ev1: ConstMapper.Aux[String, PS, H0],
+    ev2: Zip.Aux[PS :: H0 :: HNil, H1],
     ev3: Mapper.Aux[parseValue.type, H1, H2],
     ev4: Mapper.Aux[toSingletonMap.type, H2, H3],
     ev5: Monoid[H3]
-  ): H3 = {
+  ) = {
     column
       .map(value => runParsers(parserHList)(value) map toSingletonMap)
       .combineAll
   }
 
   val column = List(
-    "Hello", "42.0", "True", "False", "True", "True", "False", "True"
+    "Hello", "42.0", "True", "False", "True", "True", "False", "True",
+    "41", "42"
   )
-  val summarizeExample = summarize(parsers)(column)
+  val tvhExample = typedValueHistograms(parsers)(column)
 
 }

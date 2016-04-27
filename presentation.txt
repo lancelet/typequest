@@ -127,9 +127,12 @@ val phlist = stringParser :: doubleParser :: HNil
 val res = phlist map pparse
 ```
 
-Still doesn't work!
+Success!
 ---
 | \gType Constraint Trick (Travis Brown)
+
+If at[Parser[T]]( ... ) fails for you, you can try 
+the type constraint trick:
 
 ```
 object pparse extends Poly1 {
@@ -143,7 +146,8 @@ val phlist = stringParser :: doubleParser :: HNil
 val res = phlist map pparse
 ```
 
-Success!
+(I found it would fail if I defined Parser[T] as a
+trait for example.)
 ---
 | \gRemaining Parts
 
