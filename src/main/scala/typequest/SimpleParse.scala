@@ -17,15 +17,14 @@ import cats.std.all._
  *   scala> import typequest.SimpleParse._
  *   scala> tvhExample
  *
- * In the example provided in the class, we have the following column of
- * string values:
+ * In the example provided below, we have the following List of string values:
  *   val column = List(
  *     "Hello", "42.0", "True", "False", "True", "True", "False", "True",
  *     "41", "42"
  *   )
  *
- * We attempt to parse each element using a parser that can recognize doubles
- * and a parser that can recognize strings:
+ * We attempt to parse each element using two parsers (but we can trivially
+ * expand to more):
  *   val parsers = doubleParser :: stringParser :: HNil
  * If parsing succeeds, we collect a histogram / map of all the unique values.
  *
